@@ -1,0 +1,6 @@
+@ImageStorageAPI_HostAddress = http://localhost:5083
+
+GET {{ImageStorageAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
