@@ -16,7 +16,20 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Services" />
+      <Compile Remove="Controller\Auth.cs" />
+      <Compile Remove="Controller\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="Controller\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="Controller\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Remove="Controller\**" />
     </ItemGroup>
 
 </Project>

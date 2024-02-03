@@ -1,20 +1,54 @@
+using ImageStorageAPI.Data;
 using ImageStorageAPI.Models;
+using ImageStorageAPI.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 
-builder.Services.AddDbContext<ImageDBContext>(options =>
+builder.Services.AddHttpClient<RandomImage>();
+
+builder.Services.AddDbContext<ImageDbContext>(options =>
 {
     options.UseInMemoryDatabase("ImageDatabase");
 });
 
+builder.Services.AddTransient<IRandomImage, RandomImage>();
+
+builder.Services.AddTransient<IImageService, ImageService>();
+
+builder.Services.AddScoped<IImageDbContext, ImageDbContext>();
+
+var Origins = "All";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(Origins,
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+});
+
+
 var app = builder.Build();
+
+
+app.UseCors(Origins);
+
+
+using (var scope = app.Services.CreateScope())
+{
+    var imageService = scope.ServiceProvider.GetRequiredService<IImageService>();
+
+    await imageService.InsertRandomImages();
+}
+
 
 
 // Configure the HTTP request pipeline.
@@ -24,36 +58,33 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+
 app.UseHttpsRedirection();
 
-
-
-
-
-app.MapPost("/api/images/upload", async (ImageRequest imageRequest, ImageDBContext dbContext) =>
+app.MapPost("/api/images/upload", async (ImageRequest imageRequest, IServiceScopeFactory scopeFactory) =>
 {
-    var image = new Image
-    {
-        Name = imageRequest.Name,
-        Data = imageRequest.Data
-    };
+    using var scope = scopeFactory.CreateScope();
+    var imageService = scope.ServiceProvider.GetRequiredService<IImageService>();
+    var image = await imageService.UploadImage(imageRequest);
 
-    dbContext.Images.Add(image);
-    await dbContext.SaveChangesAsync();
-    
     return Results.Created($"/api/images/{image.Id}", image);
 }).WithOpenApi();
 
-app.MapGet("/api/images", async (ImageDBContext dbContext) =>
+app.MapGet("/api/images", async (IServiceScopeFactory scopeFactory) =>
 {
-    var images = await dbContext.Images.ToListAsync();
+    using var scope = scopeFactory.CreateScope();
+    var imageService = scope.ServiceProvider.GetRequiredService<IImageService>();
+    var images = await imageService.GetAllImages();
     return Results.Ok(images);
-});`
-//.WithName("GetWeatherForecast")
+});
 
-app.MapGet("/api/images/{id}", async (int id, ImageDBContext dbContext) =>
+
+app.MapGet("/api/images/{id}", async (int id, IServiceScopeFactory scopeFactory) =>
 {
-    var image = await dbContext.Images.FindAsync(id);
+    using var scope = scopeFactory.CreateScope();
+    var imageService = scope.ServiceProvider.GetRequiredService<IImageService>();
+    
+    var image = await imageService.GetImageById(id);
     if (image == null)
     {
         return Results.NotFound();
@@ -61,23 +92,19 @@ app.MapGet("/api/images/{id}", async (int id, ImageDBContext dbContext) =>
     return Results.Ok(image);
 });
 
-app.MapDelete("/api/images/{id}/delete", async (int id, ImageDBContext dbContext) =>
+
+app.MapDelete("/api/images/{id}/delete", async (int id, IServiceScopeFactory scopeFactory) =>
 {
-    var image = await dbContext.Images.FindAsync(id);
-    if (image == null)
+    using var scope = scopeFactory.CreateScope();
+    var imageService = scope.ServiceProvider.GetRequiredService<IImageService>();
+    
+    var result = await imageService.DeleteImage(id);
+    if (!result)
     {
         return Results.NotFound();
     }
-
-    dbContext.Images.Remove(image);
-    await dbContext.SaveChangesAsync();
 
     return Results.NoContent();
 });
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
